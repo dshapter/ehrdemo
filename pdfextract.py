@@ -2,7 +2,8 @@ import re
 import argparse
 import io
 import subprocess
-import ehr_error
+from ehr_error import PDFParseException
+from EHRPageProcessor import PageProcessor
 
 from pdfminer.converter import TextConverter
 from pdfminer.pdfinterp import PDFPageInterpreter
@@ -10,41 +11,32 @@ from pdfminer.pdfinterp import PDFResourceManager
 from pdfminer.pdfpage import PDFPage
 
 
-
 class Record:
-    page_one_keywords = ['Reason\sFor\sVisit', 'HPI']
-
     def __init__(self, header=None, body=None):
         self.header = header
-        self.body = body
+        self.body = ''
+        self.page_data = None
 
-    def extract_page_one(self, text):
-        match = re.search('(.+)({}.+)'.format(self.page_one_keywords[0]), text)
+    def add_text(self,text):
+        self.body += text
+
+    def extract_pages(self, text):
+        match = re.search('(.+)({}.+)'.format(PageOne.keywords[0]), text)
         header = ''
         if match:
             header = match.group(1)
             self.body = match.group(2)
         else:
-            raise ehr_error.PDFParseException
+            raise PDFParseException
         header = header.replace('NameChart#DOBRefer Doctor', '')
         header = header.replace('DateLocationPCPInsurance', '')
         self.header = header
         self.body = match.group(2)
-        self.process_page_one_body()
+        self.process_pages()
 
-    def extract_page_others(self, text):
-        pass
-        #print(text)
-
-    def process_page_one_body(self):
-        end_index = len(self.page_one_keywords)
-        index = 0
-        search_string = '({})(.+)({})'.format(self.page_one_keywords[index],
-                                              self.page_one_keywords[index+1])
-        match = re.search(search_string, self.body)
-        if match:
-            print(match.group(2))
-
+    def process_pages(self):
+        self.page_data = PageProcessor(self.body)
+        return
 
 def extract_text_from_pdf(pdf_path):
     resource_manager = PDFResourceManager()
@@ -96,11 +88,14 @@ def parse_pages(page_list):
         if page_number == 1:
             # this is a new encounter/record
             records.append(Record())
-            records[encounter_index].extract_page_one(page_text)
+            records[encounter_index].add_text(page_text)
         else:
-            records[encounter_index].extract_page_others(page_text)
-            if page_number == encounter_pages: # finished this encounter
+            records[encounter_index].add_text(page_text)
+            if page_number == encounter_pages:
+                # finished this encounter
+                records[encounter_index].process_pages()
                 encounter_index += 1
+
     print(len(records))
 
 

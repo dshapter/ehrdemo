@@ -1,0 +1,3 @@
+
+class PDFParseException(Exception):
+    pass

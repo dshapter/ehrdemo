@@ -3,40 +3,13 @@ import argparse
 import io
 import subprocess
 from ehr_error import PDFParseException
-from EHRPageProcessor import PageProcessor
+from record import Record
 
 from pdfminer.converter import TextConverter
 from pdfminer.pdfinterp import PDFPageInterpreter
 from pdfminer.pdfinterp import PDFResourceManager
 from pdfminer.pdfpage import PDFPage
 
-
-class Record:
-    def __init__(self, header=None, body=None):
-        self.header = header
-        self.body = ''
-        self.page_data = None
-
-    def add_text(self,text):
-        self.body += text
-
-    def extract_pages(self, text):
-        match = re.search('(.+)({}.+)'.format(PageOne.keywords[0]), text)
-        header = ''
-        if match:
-            header = match.group(1)
-            self.body = match.group(2)
-        else:
-            raise PDFParseException
-        header = header.replace('NameChart#DOBRefer Doctor', '')
-        header = header.replace('DateLocationPCPInsurance', '')
-        self.header = header
-        self.body = match.group(2)
-        self.process_pages()
-
-    def process_pages(self):
-        self.page_data = PageProcessor(self.body)
-        return
 
 def extract_text_from_pdf(pdf_path):
     resource_manager = PDFResourceManager()
@@ -69,7 +42,7 @@ def extract_text(input, pdf_extracter_cmd):
     return output.stdout.read()
 
 
-def parse_pages(page_list):
+def parse_pages(page_list, text):
     number_of_pages = len(page_list)
     if number_of_pages == 0:
         return # throw exception here
@@ -89,16 +62,15 @@ def parse_pages(page_list):
             # this is a new encounter/record
             records.append(Record())
             records[encounter_index].add_text(page_text)
+            records[encounter_index].add_helper_text(text, encounter_index)
         else:
             records[encounter_index].add_text(page_text)
             if page_number == encounter_pages:
                 # finished this encounter
                 records[encounter_index].process_pages()
                 encounter_index += 1
-
-    print(len(records))
-
-
+    for record in records:
+        record.post_process()
 
 
 if __name__ == '__main__':
@@ -107,11 +79,11 @@ if __name__ == '__main__':
     parser.add_argument('--pdf_cmd', help='command to extract PDF')
     args = parser.parse_args()
     text = extract_text(args.input, args.pdf_cmd)
-    tokens = text.decode().split('\n')
-    #for token in tokens:
-    #    print(token)
+    #tokens = text.decode().split('\n')
+    # for token in tokens:
+    #     print(token)
     page_list = extract_text_from_pdf(args.input)
-    parse_pages(page_list)
+    parse_pages(page_list, text)
 
 
 

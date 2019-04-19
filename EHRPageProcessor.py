@@ -100,3 +100,30 @@ class PageProcessor:
             if match:
                 return match.group(2)
         return None
+
+class Helper:
+    '''
+    This is a cheater class using the complete PDF text as extracted from
+    the command line tool. The idea here is ues this  class to help
+    post process any ambiguous text blocks found in the main page processr.
+    '''
+    def __init__(self, text, encounter):
+        self.text = text.decode()
+        self.iop = ''
+        enc = 0
+        start = 0
+        # TODO: figure out logic here; not getting the right values for IP
+        while True:
+            match = re.search('IOP', self.text[start:])
+            if match:
+                start = match.end()
+                if enc == encounter:
+                    tokens = self.text[start:].split('\n')
+                    for i in range(5):
+                        if i % 2 == 0:
+                            self.iop += tokens[i].replace('\n', ' ')
+                            self.iop += ' '
+                    break
+
+            enc += 1
+
